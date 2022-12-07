@@ -11,6 +11,7 @@ pd.set_option('display.max_columns', None)
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+from pandas.plotting import scatter_matrix
 from sklearn.model_selection import train_test_split
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
@@ -30,7 +31,7 @@ df = pd.read_csv(r'C:\Users\apmel\OneDrive\IDEs\Anaconda-Files-Python\myPractice
 df.head()
 
 #Shuffling the dataframe
-df = df.sample(frac=1)
+#df = df.sample(frac=1)
 #df = df.sample(n=len(df), random_state=1)
 df.head()
 
@@ -51,18 +52,16 @@ sns.histplot(data=df, x='median_income')
 # fig = plt.figure(figsize=(15, 5))
 # df['median_income'].hist(bins=50)
 
-#Checking for value_counts()
+#Checking for value_counts() on the categorical feature
 #df['median_house_value'].value_counts() #Not necessary, since it is not a classification problem
 df['ocean_proximity'].value_counts()
 df['ocean_proximity'].value_counts().plot(kind='barh', figsize=(10,7))
 
 #Looking for correlations usign the standard correlation coefficient that goes from -1 to 1
-corr_matrix = df.corr()
+corr_matrix = df.corr() #Creating a dataframe with the correlations
 corr_matrix['median_house_value'].sort_values(ascending=False)
 
 #Now looking for correlations usign scatter_matrix
-from pandas.plotting import scatter_matrix
-
 attributes = ['median_house_value', 'median_income', 'total_rooms', 'housing_median_age']
 scatter_matrix(df[attributes], figsize=(12, 8))
 
@@ -78,6 +77,8 @@ df['income_cat'] = pd.cut(df['median_income'],
                           bins=[0, 1.5, 3, 4.5, 6, np.inf],
                           labels=[1, 2, 3 ,4, 5])
 df['income_cat'].value_counts()
+
+fig = plt.figure(figsize=(10, 7))
 sns.histplot(df['income_cat'])
 #df['income_cat'].hist()
 
@@ -92,10 +93,8 @@ df["income_cat"].value_counts() / len(df)
 for set_ in (strat_train_set, strat_test_set):
     set_.drop('income_cat', axis=1, inplace=True)
 
-
 #More data visualization, now with the strat_train_set dataframe
 housing = strat_train_set.copy()
-
 
 fig = plt.figure(figsize=(10, 7))
 sns.scatterplot(housing, x='longitude', y='latitude', alpha=0.1)
@@ -116,34 +115,158 @@ housing['population_per_household'] = housing['population'] / housing['household
 corr_matrix = housing.corr()
 corr_matrix['median_house_value'].sort_values(ascending=False)
 
-############################################
-#continue from here#
-############################################
+#Separating the features from the target. PS. Using only the train data
+X_train = strat_train_set.drop('median_house_value', axis=1).copy()
+y_train = strat_train_set['median_house_value'].copy()
 
-##Preparing for ML##
-#Separating the features from the target
-X = df.drop('median_house_value', axis=1).copy()
-y = df['median_house_value'].copy()
 
-#Separating numerical features from categorical features
+'''
+#An example when dealing with missing data
+X.isnull().sum()
+#Filling the 'total_bedrooms' feature with the median
+median = X['total_bedrooms'].median()
+X['total_bedrooms'].fillna(median, inplace=True)
+X.isnull().sum()
+
+
+##Handling numerical and categorical data##
+
+#Separating numerical and categorical data
 X_num = X.drop('ocean_proximity', axis=1)
-X_cat = X['ocean_proximity']
+X_cat = X[['ocean_proximity']] #Two [] to make it a DataFrame to use with OneHotEncoder
 
-num_features_list = X.select_dtypes(exclude='object').columns
-cat_features_list = X.select_dtypes(include='object').columns
+#Handling missing numerical data with SimpleImputer
+imputer = SimpleImputer(strategy='median')
 
-#Feature scaling and transformations pipelines - numerical and categorical features
-#Applying a pipeline for numerical features:
+#Fitting and transforming the object
+imputer.fit(X_num)
+num_data = imputer.transform(X_num)
+
+#data = imputer.fit_transform(X_num)
+X_tr = pd.DataFrame(num_data, columns=X_num.columns)
+X_tr.isnull().sum()
+
+#Handling categorical data with OneHotEncoder
+encoder = OneHotEncoder(sparse=False)
+cat_data = encoder.fit_transform(X_cat) #sparse matrix
+cat_data = cat_data.toarray() #converting it to an array
+cat_data
+
+'''
+
+
+############################################
+
+
+##### Data cleaning #####
+#Looking again for missing values
+X_train.isnull().sum()
+
+#Create a pipeline for dealing numerical data
 num_pipeline = Pipeline([
     ('imputer', SimpleImputer(strategy='median')),
     ('std_scaler', StandardScaler())
     ])
 
-#Now adding the categorical features
+##Handling numerical and categorical data together with another pipeline##
+#Separating numerical features from categorical features and storing in a list
+num_attribs = X_train.select_dtypes(exclude='object').columns
+cat_attribs = X_train.select_dtypes(include='object').columns
+#cat_attribs = ['ocean_proximity']
+
+#Applying ColumnTransformer with the previous pipeline
 full_pipeline = ColumnTransformer([
-    ('num', num_pipeline, num_features_list),
-    ('cat', OneHotEncoder(), cat_features_list)
+    ('num', num_pipeline, num_attribs),
+    ('cat', OneHotEncoder(), cat_attribs)
     ])
+
+X_train_prepared = full_pipeline.fit_transform(X_train)
+
+## Training the models ##
+
+#Linear Regression model
+lin_reg = LinearRegression()
+lin_reg.fit(X_train_prepared, y_train)
+
+#Function to compare the predicted values with the real ones
+def compare(model, X_data, y_data):
+    y_true_5 = y_data[:5]
+    y_pred = model.predict(X_data[:5])
+    comparision_dataframe = pd.DataFrame(data={'True values': y_true_5, 'Predicted values': y_pred})
+    comparision_dataframe['Difference'] = comparision_dataframe['True values'] - comparision_dataframe['Predicted values']
+    print(comparision_dataframe)    
+    
+compare(lin_reg, X_train_prepared, y_train)
+
+#Applying RMSE (Root Mean Squared Error) to evaluate the linear regression model on the train data
+y_train_prepared_lin_reg_pred = lin_reg.predict(X_train_prepared)
+lin_rmse_train = mean_squared_error(y_train, y_train_prepared_lin_reg_pred, squared=False)
+lin_rmse_train
+
+#Better evaluating using cross-validation
+scores = cross_val_score(lin_reg, X_train_prepared, y_train, scoring="neg_mean_squared_error", cv=10)
+lin_reg_scores = np.sqrt(-scores)
+lin_reg_scores
+mean_lin_reg_scores = lin_reg_scores.mean()
+mean_lin_reg_scores
+std_deviation_lin_reg = lin_reg_scores.std()
+std_deviation_lin_reg
+
+#DecisionTreeRegressor model
+tree_reg = DecisionTreeRegressor()
+tree_reg.fit(X_train_prepared, y_train)
+
+compare(tree_reg, X_train_prepared, y_train)
+
+#Applying RMSE (Root Mean Squared Error) to evaluate the DecisionTreeRegressor model on the train data
+y_train_prepared_tree_reg_pred = tree_reg.predict(X_train_prepared)
+tree_rmse_train = mean_squared_error(y_train, y_train_prepared_tree_reg_pred, squared=False)
+tree_rmse_train #Overfitting!!
+
+#Better evaluating using cross-validation
+scores = cross_val_score(tree_reg, X_train_prepared, y_train, scoring="neg_mean_squared_error", cv=10)
+tree_reg_scores = np.sqrt(-scores)
+tree_reg_scores
+mean_tree_reg_scores = tree_reg_scores.mean()
+mean_tree_reg_scores
+std_deviation_tree_reg = tree_reg_scores.std()
+std_deviation_tree_reg
+
+#RandomForestRegressor model
+forest_reg = RandomForestRegressor()
+forest_reg.fit(X_train_prepared, y_train)
+
+compare(forest_reg, X_train_prepared, y_train)
+
+#Applying RMSE (Root Mean Squared Error) to evaluate the DecisionTreeRegressor model on the train data
+y_train_prepared_forest_reg_pred = forest_reg.predict(X_train_prepared)
+forest_rmse_train = mean_squared_error(y_train, y_train_prepared_forest_reg_pred, squared=False)
+forest_rmse_train 
+
+#Better evaluating using cross-validation
+scores = cross_val_score(forest_reg, X_train_prepared, y_train, scoring="neg_mean_squared_error", cv=10)
+forest_reg_scores = np.sqrt(-scores)
+forest_reg_scores
+mean_forest_reg_scores = forest_reg_scores.mean()
+mean_forest_reg_scores
+std_deviation_forest_reg = forest_reg_scores.std()
+std_deviation_forest_reg
+
+
+#########################Continue from here########################
+#########################Continue from here########################
+#########################Continue from here########################
+#########################Continue from here########################
+#########################Continue from here########################
+#########################Continue from here########################
+#########################Continue from here########################
+#########################Continue from here########################
+aply Supot Vector Machine algorith
+
+
+
+
+############# delete ########################
 
 #Splitting the data into train and test
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, shuffle=True)
@@ -252,6 +375,11 @@ gbr_rmse_train
 y_test_prepared_gbr_pred = gbr_model.predict(X_test_prepared)
 gbr_rmse_test = mean_squared_error(y_test, y_test_prepared_gbr_pred, squared=False)
 gbr_rmse_test
+
+############# delete ########################
+
+
+
 
 #Fine tunning the model
 #Using the RandomForestRegressor model 
