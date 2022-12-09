@@ -25,6 +25,8 @@ from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import GridSearchCV
+import joblib
+
 
 #Loading the dataframe
 df = pd.read_csv(r'C:\Users\apmel\OneDrive\IDEs\Anaconda-Files-Python\myPractice\housing_dataset\housing.csv')
@@ -55,6 +57,7 @@ sns.histplot(data=df, x='median_income')
 #Checking for value_counts() on the categorical feature
 #df['median_house_value'].value_counts() #Not necessary, since it is not a classification problem
 df['ocean_proximity'].value_counts()
+fig = plt.figure(figsize=(15, 5))
 df['ocean_proximity'].value_counts().plot(kind='barh', figsize=(10,7))
 
 #Looking for correlations usign the standard correlation coefficient that goes from -1 to 1
@@ -90,8 +93,8 @@ strat_test_set["income_cat"].value_counts() / len(strat_test_set)
 df["income_cat"].value_counts() / len(df)
 
 #Now removing the 'income_cat' column from strat_test_set and strat_train_set
-for set_ in (strat_train_set, strat_test_set):
-    set_.drop('income_cat', axis=1, inplace=True)
+for column in (strat_train_set, strat_test_set):
+    column.drop('income_cat', axis=1, inplace=True)
 
 #More data visualization, now with the strat_train_set dataframe
 housing = strat_train_set.copy()
@@ -115,12 +118,14 @@ housing['population_per_household'] = housing['population'] / housing['household
 corr_matrix = housing.corr()
 corr_matrix['median_house_value'].sort_values(ascending=False)
 
-#Separating the features from the target. PS. Using only the train data
-X_train = strat_train_set.drop('median_house_value', axis=1).copy()
-y_train = strat_train_set['median_house_value'].copy()
+#Keeping the combined attributes and separating the features from the target
+X_train = housing.drop('median_house_value', axis=1).copy()
+y_train = housing['median_house_value'].copy()
+
 
 
 '''
+Data cleaning without using pipelines
 #An example when dealing with missing data
 X.isnull().sum()
 #Filling the 'total_bedrooms' feature with the median
@@ -151,12 +156,7 @@ encoder = OneHotEncoder(sparse=False)
 cat_data = encoder.fit_transform(X_cat) #sparse matrix
 cat_data = cat_data.toarray() #converting it to an array
 cat_data
-
 '''
-
-
-############################################
-
 
 ##### Data cleaning #####
 #Looking again for missing values
@@ -190,7 +190,7 @@ lin_reg.fit(X_train_prepared, y_train)
 
 #Function to compare the predicted values with the real ones
 def compare(model, X_data, y_data):
-    y_true_5 = y_data[:5]
+    y_true_5 = y_data.iloc[:5]
     y_pred = model.predict(X_data[:5])
     comparision_dataframe = pd.DataFrame(data={'True values': y_true_5, 'Predicted values': y_pred})
     comparision_dataframe['Difference'] = comparision_dataframe['True values'] - comparision_dataframe['Predicted values']
@@ -201,14 +201,14 @@ compare(lin_reg, X_train_prepared, y_train)
 #Applying RMSE (Root Mean Squared Error) to evaluate the linear regression model on the train data
 y_train_prepared_lin_reg_pred = lin_reg.predict(X_train_prepared)
 lin_rmse_train = mean_squared_error(y_train, y_train_prepared_lin_reg_pred, squared=False)
-lin_rmse_train
+lin_rmse_train #68,165
 
 #Better evaluating using cross-validation
 scores = cross_val_score(lin_reg, X_train_prepared, y_train, scoring="neg_mean_squared_error", cv=10)
 lin_reg_scores = np.sqrt(-scores)
 lin_reg_scores
 mean_lin_reg_scores = lin_reg_scores.mean()
-mean_lin_reg_scores
+mean_lin_reg_scores #68,443
 std_deviation_lin_reg = lin_reg_scores.std()
 std_deviation_lin_reg
 
@@ -216,19 +216,19 @@ std_deviation_lin_reg
 tree_reg = DecisionTreeRegressor()
 tree_reg.fit(X_train_prepared, y_train)
 
-compare(tree_reg, X_train_prepared, y_train)
+compare(tree_reg, X_train_prepared, y_train) # Predicted the values 100% correct???
 
 #Applying RMSE (Root Mean Squared Error) to evaluate the DecisionTreeRegressor model on the train data
 y_train_prepared_tree_reg_pred = tree_reg.predict(X_train_prepared)
 tree_rmse_train = mean_squared_error(y_train, y_train_prepared_tree_reg_pred, squared=False)
-tree_rmse_train #Overfitting!!
+tree_rmse_train #0 - Overfitting!!
 
 #Better evaluating using cross-validation
 scores = cross_val_score(tree_reg, X_train_prepared, y_train, scoring="neg_mean_squared_error", cv=10)
 tree_reg_scores = np.sqrt(-scores)
 tree_reg_scores
 mean_tree_reg_scores = tree_reg_scores.mean()
-mean_tree_reg_scores
+mean_tree_reg_scores #71,482 - Performing worse than linear regression
 std_deviation_tree_reg = tree_reg_scores.std()
 std_deviation_tree_reg
 
@@ -241,189 +241,79 @@ compare(forest_reg, X_train_prepared, y_train)
 #Applying RMSE (Root Mean Squared Error) to evaluate the DecisionTreeRegressor model on the train data
 y_train_prepared_forest_reg_pred = forest_reg.predict(X_train_prepared)
 forest_rmse_train = mean_squared_error(y_train, y_train_prepared_forest_reg_pred, squared=False)
-forest_rmse_train 
+forest_rmse_train #18,721
 
 #Better evaluating using cross-validation
 scores = cross_val_score(forest_reg, X_train_prepared, y_train, scoring="neg_mean_squared_error", cv=10)
 forest_reg_scores = np.sqrt(-scores)
 forest_reg_scores
 mean_forest_reg_scores = forest_reg_scores.mean()
-mean_forest_reg_scores
+mean_forest_reg_scores #50,253 - Better performance till now
 std_deviation_forest_reg = forest_reg_scores.std()
 std_deviation_forest_reg
 
+#Saving the RandomForestRegressor model
+joblib.dump(forest_reg, 'forest_reg.pkl')
+#forest_reg_model_loaded = joblib.load('forest_reg.pkl')
 
-#########################Continue from here########################
-#########################Continue from here########################
-#########################Continue from here########################
-#########################Continue from here########################
-#########################Continue from here########################
-#########################Continue from here########################
-#########################Continue from here########################
-#########################Continue from here########################
-aply Supot Vector Machine algorith
-
-
-
-
-############# delete ########################
-
-#Splitting the data into train and test
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, shuffle=True)
-X_train
-y_train
-
-#Fitting the trainning data into the pipeline
-X_train_prepared = full_pipeline.fit_transform(X_train)
-X_train
-X_train_prepared
-
-#Fitting the test data into the pipeline
-X_test_prepared = full_pipeline.fit_transform(X_test)
-X_test
-X_test_prepared
-
-#Building a Linear Regression model
-lin_reg = LinearRegression()
-lin_reg.fit(X_train_prepared, y_train)
-
-#Better evaluating using cross-validation
-scores = cross_val_score(lin_reg, X_train_prepared, y_train, cv=5)
-mean_scores = scores.mean()
-scores
-mean_scores
-
-##Evaluating the linear regression model with RMSE
-#Evaluating the train data with Root Mean Squared Error
-y_train_prepared_lin_pred = lin_reg.predict(X_train_prepared)
-lin_rmse_train = mean_squared_error(y_train, y_train_prepared_lin_pred, squared=False)
-lin_rmse_train
-
-#Evaluating the test data with Root Mean Squared Error
-y_test_lin_pred = lin_reg.predict(X_test_prepared)
-lin_rmse_test = mean_squared_error(y_test, y_test_lin_pred, squared=False)
-lin_rmse_test
-
-
-#Function to compare the predicted values with the real ones
-def compare(model, test_data, y_true):
-    y_true_5 = y_true[:5]
-    y_pred = model.predict(test_data[:5])
-    comparision_dataframe = pd.DataFrame(data={'True values': y_true_5, 'Predicted values': y_pred})
-    comparision_dataframe['Difference'] = comparision_dataframe['True values'] - comparision_dataframe['Predicted values']
-    print(comparision_dataframe)    
-    
-compare(lin_reg, X_test_prepared, y)
-
-#Building a DecisionTreeRegression model
-tree_reg = DecisionTreeRegressor()
-tree_reg.fit(X_train_prepared, y_train)
-
-#Better evaluating using cross-validation
-scores = cross_val_score(tree_reg, X_train_prepared, y_train, cv=5)
-mean_scores = scores.mean()
-scores
-mean_scores
-
-#Evaluating the DecisionTreeRegression model
-#Evaluating the train data with Root Mean Squared Error
-y_train_prepared_tree_pred = tree_reg.predict(X_train_prepared)
-tree_rmse_train = mean_squared_error(y_train, y_train_prepared_tree_pred, squared=False)
-tree_rmse_train #Overfitting the data
-
-#Evaluating the test data with Root Mean Squared Error
-y_test_prepared_tree_pred = tree_reg.predict(X_test_prepared)
-tree_rmse_test = mean_squared_error(y_test, y_test_prepared_tree_pred, squared=False)
-tree_rmse_test
-
-#Building a RandomForestRegressor model
-rnd_forest = RandomForestRegressor(max_depth=10)
-rnd_forest.fit(X_train_prepared, y_train)
-
-#Better evaluating using cross-validation
-scores = cross_val_score(rnd_forest, X_train_prepared, y_train, cv=5)
-mean_scores = scores.mean()
-scores
-mean_scores
-
-#Evaluating the train data with Root Mean Squared Error
-y_train_prepared_rnd_pred = rnd_forest.predict(X_train_prepared)
-rnd_rmse_train = mean_squared_error(y_train, y_train_prepared_rnd_pred, squared=False)
-rnd_rmse_train
-
-#Evaluating the test data with Root Mean Squared Error
-y_test_prepared_rnd_pred = rnd_forest.predict(X_test_prepared)
-rnd_rmse_test = mean_squared_error(y_test, y_test_prepared_rnd_pred, squared=False)
-rnd_rmse_test
-
-#Building a GradientBoostingRegressor model
-gbr_model = GradientBoostingRegressor(n_estimators=250)
-gbr_model.fit(X_train_prepared, y_train)
-
-#Better evaluating using cross-validation
-scores = cross_val_score(gbr_model, X_train_prepared, y_train, cv=5)
-mean_scores = scores.mean()
-scores
-mean_scores
-
-#Evaluating the train data with Root Mean Squared Error
-y_train_prepared_gbr_pred = gbr_model.predict(X_train_prepared)
-gbr_rmse_train = mean_squared_error(y_train, y_train_prepared_gbr_pred, squared=False)
-gbr_rmse_train
-
-#Evaluating the test data with Root Mean Squared Error
-y_test_prepared_gbr_pred = gbr_model.predict(X_test_prepared)
-gbr_rmse_test = mean_squared_error(y_test, y_test_prepared_gbr_pred, squared=False)
-gbr_rmse_test
-
-############# delete ########################
-
-
-
-
-#Fine tunning the model
-#Using the RandomForestRegressor model 
+## Fine tunning the RandomForestRegressor model ##
 param_grid = [
-    {'n_estimators': [3, 10, 30], 'max_features': [2, 4, 6, 8], 'max_depth': [1, 10, 20]},
-    {'bootstrap': [False], 'n_estimators': [3, 10], 'max_features': [2, 3, 4]},
-    ]
+    {'n_estimators': [3, 10, 30, 40, 50], 'max_features': [2, 4, 6, 8, 10]}, # 5 x 5 = 25 combinations
+    {'bootstrap': [False], 'n_estimators': [3, 10], 'max_features': [2, 3, 4]} # 2 x 3 = 6 combinations
+    ] #total of 25 + 6 = 31 combinations
 
+forest_reg = RandomForestRegressor()
+grid_search = GridSearchCV(forest_reg, param_grid, 
+                           cv=5, 
+                           scoring='neg_mean_squared_error', 
+                           return_train_score=True)
 
-rnd_forest = RandomForestRegressor()
-grid_search = GridSearchCV(rnd_forest, param_grid, cv=5)
 grid_search.fit(X_train_prepared, y_train)
 
-grid_search.best_params_
+grid_search.best_params_ #{'max_features': 6, 'n_estimators': 40}
 grid_search.best_estimator_
+grid_search.cv_results_
 
-best_RandomForestRegressor_model = grid_search.best_estimator_
+#Evaluating scores for each iteration
+cvres = grid_search.cv_results_
+for mean_score, params in zip(cvres["mean_test_score"], cvres["params"]):
+    print(f'{np.sqrt(-mean_score):.3f} for {params}') #49,831 - The result was improved!
 
-final_RandomForestRegressor_predictions = best_RandomForestRegressor_model.predict(X_test_prepared)
+## Evaluating the system on the test set ##
+#Creating the best model with the best estimators from the GridSearch
+final_model = grid_search.best_estimator_
 
-final_mse = mean_squared_error(y_test, final_RandomForestRegressor_predictions, squared=False)
-final_mse
+#Sppliting the features from the target
+X_test = strat_test_set.drop('median_house_value', axis=1)
+y_test = strat_test_set['median_house_value'].copy()
+
+#Adding combined attributes
+X_test['room_per_household'] = X_test['total_rooms'] / X_test['households']
+X_test['bedroom_per_room'] = X_test['total_bedrooms'] / X_test['total_rooms']
+X_test['population_per_household'] = X_test['population'] / X_test['households']
+
+#Transforming the test data with the pipeline
+X_test_prepared = full_pipeline.transform(X_test)
+
+final_predictions = final_model.predict(X_test_prepared)
+
+final_mse = mean_squared_error(y_test, final_predictions)
+final_rmse = np.sqrt(final_mse) #47,408
+final_rmse
+
+
+compare(final_model, X_test_prepared, y_test)
 
 
 
-#Using the GradientBoostingRegressor model 
-#get back on this...
-param_grid = {
-    "n_estimators": [1, 100, 250, 500],
-    "max_leaf_nodes": [2, 10, 100],
-    "learning_rate": [0.01, 0.1, 1],
-    }
 
-gbr_model = GradientBoostingRegressor()
-grid_search = GridSearchCV(gbr_model, param_grid, cv=5)
-grid_search.fit(X_train_prepared, y_train)
 
-grid_search.best_params_
-grid_search.best_estimator_
 
-best_GradientBoostingRegressor_model = grid_search.best_estimator_
 
-best_GradientBoostingRegressor_model = best_RandomForestRegressor_model.predict(X_test_prepared)
 
-final_mse = mean_squared_error(y_test, best_GradientBoostingRegressor_model, squared=False)
-final_mse
+
+
+
+
+
 
