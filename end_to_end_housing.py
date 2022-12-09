@@ -301,7 +301,6 @@ final_mse = mean_squared_error(y_test, final_predictions)
 final_rmse = np.sqrt(final_mse) #47,408
 final_rmse
 
-
 compare(final_model, X_test_prepared, y_test)
 
 
